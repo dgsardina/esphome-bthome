@@ -168,6 +168,28 @@ NRF52_TX_POWER_LEVELS = {
 }
 
 
+# On nRF52 the controller's transmit power is a build-time Kconfig choice; it is
+# not settable through bt_le_adv_start() for legacy advertising. Without this
+# mapping the YAML option only reached the scan response's TX Power AD element
+# and dump_config(), leaving the radio at the CONFIG_BT_CTLR_TX_PWR_0 default.
+NRF52_TX_POWER_KCONFIG = {
+    -40: "BT_CTLR_TX_PWR_MINUS_40",
+    -20: "BT_CTLR_TX_PWR_MINUS_20",
+    -16: "BT_CTLR_TX_PWR_MINUS_16",
+    -12: "BT_CTLR_TX_PWR_MINUS_12",
+    -8: "BT_CTLR_TX_PWR_MINUS_8",
+    -4: "BT_CTLR_TX_PWR_MINUS_4",
+    0: "BT_CTLR_TX_PWR_0",
+    2: "BT_CTLR_TX_PWR_PLUS_2",
+    3: "BT_CTLR_TX_PWR_PLUS_3",
+    4: "BT_CTLR_TX_PWR_PLUS_4",
+    5: "BT_CTLR_TX_PWR_PLUS_5",
+    6: "BT_CTLR_TX_PWR_PLUS_6",
+    7: "BT_CTLR_TX_PWR_PLUS_7",
+    8: "BT_CTLR_TX_PWR_PLUS_8",  # requires HAS_HW_NRF_RADIO_TX_PWR_HIGH
+}
+
+
 def get_tx_power_levels():
     if CORE.is_esp32:
         return ESP32_TX_POWER_LEVELS
@@ -277,6 +299,12 @@ async def to_code(config):
     cg.add(var.set_min_interval(config[CONF_MIN_INTERVAL]))
     cg.add(var.set_max_interval(config[CONF_MAX_INTERVAL]))
     cg.add(var.set_tx_power(config[CONF_TX_POWER]))
+    if CORE.is_nrf52:
+        from esphome.components.zephyr import zephyr_add_prj_conf
+
+        symbol = NRF52_TX_POWER_KCONFIG.get(int(config[CONF_TX_POWER]))
+        if symbol is not None:
+            zephyr_add_prj_conf(symbol, True)
     cg.add(var.set_retransmit_count(config[CONF_RETRANSMIT_COUNT]))
     cg.add(var.set_retransmit_interval(config[CONF_RETRANSMIT_INTERVAL]))
 
