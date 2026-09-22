@@ -621,8 +621,15 @@ void BTHome::start_advertising_() {
 
   // Service data (skip flags we already added)
   this->ad_[1].type = BT_DATA_SVC_DATA16;
-  this->ad_[1].data_len = this->adv_data_len_ - 3;  // Skip flags
-  this->ad_[1].data = this->adv_data_ + 4;          // Skip flags + length + type
+  // adv_data_ is laid out as:
+  //   [0..2] 02 01 06   flags AD element
+  //   [3]    length placeholder
+  //   [4]    0x16       AD type (Service Data 16-bit)
+  //   [5..]  uuid_lo uuid_hi device_info <bthome payload>
+  // bt_data carries the AD type in its own .type field, so .data must start at
+  // the UUID rather than at the type byte.
+  this->ad_[1].data_len = this->adv_data_len_ - 5;
+  this->ad_[1].data = this->adv_data_ + 5;
 
   // Set up scan response data
   size_t sd_count = 0;
