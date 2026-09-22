@@ -208,8 +208,7 @@ class BTHome : public Component {
 #ifdef USE_NRF52
   int8_t tx_power_nrf52_{0};
   struct bt_le_adv_param adv_param_;
-  struct bt_data ad_[2];
-  struct bt_data sd_[5];  // Scan response data (service UUID, TX power, appearance, name, manufacturer)
+  struct bt_data ad_[3];  // flags, BTHome service data, optional name
 #endif
 };
 

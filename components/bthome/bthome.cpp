@@ -631,56 +631,34 @@ void BTHome::start_advertising_() {
   this->ad_[1].data_len = this->adv_data_len_ - 5;
   this->ad_[1].data = this->adv_data_ + 5;
 
-  // Set up scan response data
-  size_t sd_count = 0;
-
-  // Add BTHome service UUID to scan response
-  static uint8_t svc_uuid_data[] = {BTHOME_SERVICE_UUID & 0xFF, (BTHOME_SERVICE_UUID >> 8) & 0xFF};
-  this->sd_[sd_count].type = BT_DATA_UUID16_ALL;
-  this->sd_[sd_count].data_len = sizeof(svc_uuid_data);
-  this->sd_[sd_count].data = svc_uuid_data;
-  sd_count++;
-
-  // Add TX Power Level
-  static int8_t tx_power_data;
-  tx_power_data = this->tx_power_nrf52_;
-  this->sd_[sd_count].type = BT_DATA_TX_POWER;
-  this->sd_[sd_count].data_len = sizeof(tx_power_data);
-  this->sd_[sd_count].data = reinterpret_cast<const uint8_t *>(&tx_power_data);
-  sd_count++;
-
-  // Add Appearance (Generic Sensor = 0x0540)
-  static uint8_t appearance_data[] = {0x40, 0x05};  // Little-endian 0x0540
-  this->sd_[sd_count].type = BT_DATA_GAP_APPEARANCE;
-  this->sd_[sd_count].data_len = sizeof(appearance_data);
-  this->sd_[sd_count].data = appearance_data;
-  sd_count++;
-
+  // No scan response. Supplying one makes the advertising set scannable
+  // (ADV_SCAN_IND), so the radio must stay in RX after every packet listening
+  // for scan requests - costly on a battery node, for data nothing needs. The
+  // device name is carried in the advertisement instead.
+  //
+  // Budget, counting each element's length and type bytes:
+  //     flags        2 + 1
+  //     service data 2 + (adv_data_len_ - 5)
+  //     name         2 + name_len
+  //     total      = adv_data_len_ + 2 + name_len   <=  MAX_BLE_ADVERTISEMENT_SIZE
+  // The name is dropped for this packet if it would not fit, so a long node
+  // name or a full sensor payload costs the label rather than all advertising.
+  size_t ad_count = 2;
   if (!this->device_name_.empty()) {
-    this->sd_[sd_count].type = BT_DATA_NAME_COMPLETE;
-    this->sd_[sd_count].data_len = this->device_name_.length();
-    this->sd_[sd_count].data = reinterpret_cast<const uint8_t *>(this->device_name_.c_str());
-    sd_count++;
+    size_t name_len = this->device_name_.length();
+    if (this->adv_data_len_ + 2 + name_len <= MAX_BLE_ADVERTISEMENT_SIZE) {
+      this->ad_[2].type = BT_DATA_NAME_COMPLETE;
+      this->ad_[2].data_len = name_len;
+      this->ad_[2].data = reinterpret_cast<const uint8_t *>(this->device_name_.c_str());
+      ad_count = 3;
+    } else {
+      ESP_LOGW(TAG, "Name '%s' dropped: %u + 2 + %u > %u bytes",
+               this->device_name_.c_str(), (unsigned) this->adv_data_len_,
+               (unsigned) name_len, (unsigned) MAX_BLE_ADVERTISEMENT_SIZE);
+    }
   }
 
-  if (this->has_manufacturer_id_) {
-    // Manufacturer ID (2 bytes) + ESPHome version code (4 bytes)
-    static uint8_t mfr_data[6];
-    mfr_data[0] = this->manufacturer_id_ & 0xFF;
-    mfr_data[1] = (this->manufacturer_id_ >> 8) & 0xFF;
-    uint32_t version = ESPHOME_VERSION_CODE;
-    mfr_data[2] = version & 0xFF;
-    mfr_data[3] = (version >> 8) & 0xFF;
-    mfr_data[4] = (version >> 16) & 0xFF;
-    mfr_data[5] = (version >> 24) & 0xFF;
-    this->sd_[sd_count].type = BT_DATA_MANUFACTURER_DATA;
-    this->sd_[sd_count].data_len = sizeof(mfr_data);
-    this->sd_[sd_count].data = mfr_data;
-    sd_count++;
-  }
-
-  int err = bt_le_adv_start(&this->adv_param_, this->ad_, 2,
-                            sd_count > 0 ? this->sd_ : nullptr, sd_count);
+  int err = bt_le_adv_start(&this->adv_param_, this->ad_, ad_count, nullptr, 0);
   if (err) {
     ESP_LOGE(TAG, "Advertising failed to start (err %d)", err);
     return;
