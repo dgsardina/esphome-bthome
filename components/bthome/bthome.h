@@ -51,7 +51,13 @@ static const uint8_t BTHOME_DEVICE_INFO_ENCRYPTED = 0x41;             // Regular
 static const uint8_t BTHOME_DEVICE_INFO_TRIGGER_UNENCRYPTED = 0x44;   // Trigger-based device, no encryption
 static const uint8_t BTHOME_DEVICE_INFO_TRIGGER_ENCRYPTED = 0x45;     // Trigger-based device, encrypted
 static const size_t MAX_BLE_ADVERTISEMENT_SIZE = 31;
-static const size_t MAX_DEVICE_NAME_LENGTH = 20;  // Leave room for other AD elements
+// The scan response carries the service UUID (4 bytes on air), TX power (3),
+// appearance (4) and manufacturer data (8) = 19, against the 31-byte limit.
+// That leaves 12 for the name element, of which 2 are its length and type
+// bytes - so 10 characters, not 20. At 20 a long node name overflows the scan
+// response and bt_le_adv_start() rejects the whole advertising set with
+// -EINVAL, so the device never advertises at all.
+static const size_t MAX_DEVICE_NAME_LENGTH = 10;
 
 #ifdef USE_SENSOR
 struct SensorMeasurement {
